@@ -26,6 +26,8 @@ import zipfile
 import zlib
 import ctypes
 import errno
+import uuid
+import posixpath
 
 # support basestring in python3
 try:
@@ -2809,18 +2811,28 @@ class P4Sync(Command, P4UserMap):
                     text = text.replace('\r\n', '\n')
                 contents = [ text ]
 
+        extraFileName = ""
         if type_base == "apple":
             # Apple filetype files will be streamed as a concatenation of
             # its appledouble header and the contents.  This is useless
             # on both macs and non-macs.  If using "print -q -o xx", it
             # will create "xx" with the data, and "%xx" with the header.
-            # This is also not very useful.
-            #
-            # Ideally, someday, this script can learn how to generate
-            # appledouble files directly and import those to git, but
-            # non-mac machines can never find a use for apple filetype.
-            print("\nIgnoring apple filetype file %s" % file['depotFile'])
-            return
+
+            # print -o - doesn't print what we need, but it does create the file. Get contents into temporary file and then remove the file.
+            baseFileName = str(uuid.uuid4())
+            tempFileName = os.path.join(tempfile.gettempdir(), baseFileName)
+            text = p4_read_pipe(['print', '-q', '-o', tempFileName, '%s@%s' % (file['depotFile'], file['change'])])
+            with open(tempFileName, mode='rb') as file:
+                text = file.read()
+            os.remove(tempFileName)
+            contents = [ text ]
+            percentFileName = os.path.join(tempfile.gettempdir(), "%" + baseFileName)
+            with open(percentFileName, mode='rb') as file:
+                text = file.read()
+            os.remove(percentFileName)
+            extraContents = [ text ]
+            extraFileName = posixpath.join(posixpath.dirname(relPath), "%" + posixpath.basename(relPath))
+            # return
 
         # Note that we do not try to de-mangle keywords on utf16 files,
         # even though in theory somebody may want that.
@@ -2835,6 +2847,8 @@ class P4Sync(Command, P4UserMap):
             (git_mode, contents) = self.largeFileSystem.processContent(git_mode, relPath, contents)
 
         self.writeToGitStream(git_mode, relPath, contents)
+        if extraFileName != "" :
+            self.writeToGitStream(git_mode, extraFileName, extraContents)
 
     def streamOneP4Deletion(self, file):
         relPath = self.stripRepoPath(file['path'], self.branchPrefixes)
