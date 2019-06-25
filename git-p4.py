@@ -2811,7 +2811,6 @@ class P4Sync(Command, P4UserMap):
                     text = text.replace('\r\n', '\n')
                 contents = [ text ]
 
-        extraFileName = ""
         if type_base == "apple":
             # Apple filetype files will be streamed as a concatenation of
             # its appledouble header and the contents.  This is useless
@@ -2826,14 +2825,6 @@ class P4Sync(Command, P4UserMap):
                 text = file.read()
             os.remove(tempFileName)
             contents = [ text ]
-            percentFileName = os.path.join(tempfile.gettempdir(), "%" + baseFileName)
-            with open(percentFileName, mode='rb') as file:
-                text = file.read()
-            os.remove(percentFileName)
-            extraContents = [ text ]
-            extraFileName = posixpath.join(posixpath.dirname(relPath), "%" + posixpath.basename(relPath))
-            # return
-
         # Note that we do not try to de-mangle keywords on utf16 files,
         # even though in theory somebody may want that.
         pattern = p4_keywords_regexp_for_type(type_base, type_mods)
@@ -2847,8 +2838,6 @@ class P4Sync(Command, P4UserMap):
             (git_mode, contents) = self.largeFileSystem.processContent(git_mode, relPath, contents)
 
         self.writeToGitStream(git_mode, relPath, contents)
-        if extraFileName != "" :
-            self.writeToGitStream(git_mode, extraFileName, extraContents)
 
     def streamOneP4Deletion(self, file):
         relPath = self.stripRepoPath(file['path'], self.branchPrefixes)
